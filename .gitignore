@@ -1,0 +1,21 @@
+# Useless OS files
+.DS_Store
+Thumbs.db
+
+# build/ide folders
+build/
+dist/
+vcpkg_installed/
+.idea/
+.vscode/
+.cache/
+cmake-build-*
+
+# executables
+main
+aceboy
+
+# application files
+imgui.ini
+imgui_log.txt
+settings.toml
