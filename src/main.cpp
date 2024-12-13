@@ -2,6 +2,9 @@
 #include <magic_enum/magic_enum.hpp>
 #include <spdlog/spdlog.h>
 
+#include "audiovisualizer.h"
+
+
 static bool set_logging_level(const std::string &level_name) {
   auto level = magic_enum::enum_cast<spdlog::level::level_enum>(level_name);
   if (level.has_value()) {
@@ -39,6 +42,8 @@ auto main(int argc, char *argv[]) -> int {
     return 1;
   }
 
+  AudioVisualizer visualizer;
+  visualizer.run();
 
   spdlog::info("Exiting.");
 

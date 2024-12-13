@@ -12,6 +12,8 @@ add_compile_definitions(TOML_EXCEPTIONS=0)
 
 set(SOURCE_FILES
     src/main.cpp
+    src/audiovisualizer.h
+    src/audiovisualizer.cpp
 )
 
 set(ARGPARSE_BUILD_TESTS OFF)
