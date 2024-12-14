@@ -1,5 +1,6 @@
 
 #include <array>
+#include <algorithm>
 #include <raylib.h>
 #include <rlImGui.h>
 #include <imgui.h>
@@ -26,14 +27,52 @@ void AudioVisualizer::run() {
   rlImGuiSetup(true);
 
   static bool should_close = false;
+  static bool should_loop = true;
   static Wave wave;
   static AudioStream stream;
   static float* samples = nullptr;
   static int wave_index = 0;
 
   while (!(WindowShouldClose() || should_close)) {
+    Vector2 mouse = GetMousePosition();
+    Vector2 mouse_delta = GetMouseDelta();
+
+    int width = GetScreenWidth();
+    int height = GetScreenHeight();
+    float panel_height = 240;
+    float wavepanel_height = 128;
+
     BeginDrawing();
     ClearBackground({ 57, 58, 75, 255 });
+
+    Vector2 wavepanel_min { 0, height - panel_height - wavepanel_height };
+    Vector2 wavepanel_max { (float)width, height - panel_height };
+
+    DrawRectangle(wavepanel_min.x, wavepanel_min.y, width, wavepanel_height, BLACK);
+    if (samples != nullptr) {
+      int base_y = wavepanel_max.y - (wavepanel_height / 2);
+      int frame_count = wave.frameCount;
+      float scale_y = (wavepanel_height / 2) * 0.98;
+      float frames_per_pixel = (float)frame_count / width;
+
+      int dx = 2;
+      for (int x = 0; x < width - 1; x += dx) {
+        float sample1 = samples[(int)(frames_per_pixel * x) * wave.channels] * scale_y;
+        float sample2 = samples[(int)(std::min((int)(frames_per_pixel * (x + dx)), (int)wave.frameCount - 1) * wave.channels)] * scale_y;
+        DrawLine(x, base_y + sample1, x + dx, base_y + sample2, RAYWHITE);
+      }
+
+      float pct = (float)wave_index / frame_count;
+      int bar_x = width * pct;
+      DrawLine(bar_x, height - panel_height - wavepanel_height, bar_x, height - panel_height, RED);
+
+      if (mouse.y >= wavepanel_min.y && mouse.y < wavepanel_max.y) {
+        if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) || (IsMouseButtonDown(MOUSE_LEFT_BUTTON) && (mouse_delta.x || mouse_delta.y))) {
+          float pct = (float)mouse.x / width;
+          wave_index = pct * frame_count;
+        }
+      }
+    }
 
     rlImGuiBegin();
     if (ImGui::BeginMainMenuBar()) {
@@ -85,12 +124,38 @@ void AudioVisualizer::run() {
         }
         ImGui::EndMenu();
       }
+
+      if (ImGui::BeginMenu("Audio")) {
+        ImGui::MenuItem("Loop", nullptr, &should_loop);
+        if (ImGui::MenuItem("Play", nullptr, false, samples != nullptr && !IsAudioStreamPlaying(stream))) {
+          PlayAudioStream(stream);
+        }
+        if (ImGui::MenuItem("Pause",  nullptr, false, samples != nullptr && IsAudioStreamPlaying(stream))) {
+          StopAudioStream(stream);
+        }
+        if (ImGui::MenuItem("Stop",  nullptr, false, samples != nullptr && IsAudioStreamPlaying(stream))) {
+          StopAudioStream(stream);
+          wave_index = 0;
+        }
+        ImGui::Separator();
+        if (ImGui::MenuItem("-30s", nullptr, false, samples != nullptr)) {
+          wave_index = std::clamp(wave_index - ((int)wave.sampleRate * 30), 0, (int)wave.frameCount);
+        }
+        if (ImGui::MenuItem("-10s", nullptr, false, samples != nullptr)) {
+          wave_index = std::clamp(wave_index - ((int)wave.sampleRate * 10), 0, (int)wave.frameCount);
+        }
+        if (ImGui::MenuItem("+10s", nullptr, false, samples != nullptr)) {
+          wave_index = std::clamp(wave_index + ((int)wave.sampleRate * 10), 0, (int)wave.frameCount);
+        }
+        if (ImGui::MenuItem("+30s", nullptr, false, samples != nullptr)) {
+          wave_index = std::clamp(wave_index + ((int)wave.sampleRate * 30), 0, (int)wave.frameCount);
+        }
+
+        ImGui::EndMenu();
+      }
+
       ImGui::EndMainMenuBar();
     }
-
-    int width = GetScreenWidth();
-    int height = GetScreenHeight();
-    float panel_height = 240;
 
     ImGui::SetNextWindowSize({ (float)width, panel_height });
     ImGui::SetNextWindowPos({ 0, (float)height - panel_height }, ImGuiCond_Always);
@@ -104,8 +169,19 @@ void AudioVisualizer::run() {
     EndDrawing();
 
     if (samples && IsAudioStreamProcessed(stream)) {
-      UpdateAudioStream(stream, &samples[wave_index], kSamplesPerUpdate);
-      wave_index += kSamplesPerUpdate * wave.channels;
+      int samples_left = kSamplesPerUpdate;
+      while (samples_left) {
+        int samples_to_write = std::min((int)wave.frameCount, wave_index + samples_left) - wave_index;
+        UpdateAudioStream(stream, &samples[wave_index * wave.channels], samples_to_write);
+        wave_index += samples_to_write;
+        samples_left -= samples_to_write;
+        if (wave_index >= wave.frameCount) {
+          wave_index = 0;
+          if (!should_loop) {
+            StopAudioStream(stream);
+          }
+        }
+      }
     }
   }
 
