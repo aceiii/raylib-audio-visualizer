@@ -52,14 +52,18 @@ void AudioVisualizer::run() {
     if (samples != nullptr) {
       int base_y = wavepanel_max.y - (wavepanel_height / 2);
       int frame_count = wave.frameCount;
-      float scale_y = (wavepanel_height / 2) * 0.98;
+      float scale_y = (wavepanel_height / 2) * 0.75;
       float frames_per_pixel = (float)frame_count / width;
 
-      int dx = 2;
-      for (int x = 0; x < width - 1; x += dx) {
-        float sample1 = samples[(int)(frames_per_pixel * x) * wave.channels] * scale_y;
-        float sample2 = samples[(int)(std::min((int)(frames_per_pixel * (x + dx)), (int)wave.frameCount - 1) * wave.channels)] * scale_y;
-        DrawLine(x, base_y + sample1, x + dx, base_y + sample2, RAYWHITE);
+      int dx = 1;
+      for (int x = 0; x < width; x += dx) {
+        int sample_index1 = (int)(frames_per_pixel * x) * wave.channels;
+        int sample_index2 = (int)(frames_per_pixel * (x + dx)) * wave.channels;
+
+        const auto [min, max] = std::minmax_element(&samples[sample_index1], &samples[sample_index2]);
+        float min_sample = std::min(0.0f, *min) * scale_y;
+        float max_sample = std::max(0.0f, *max) * scale_y;
+        DrawRectangle(x, base_y - max_sample, dx, max_sample - min_sample, WHITE);
       }
 
       float pct = (float)wave_index / frame_count;
