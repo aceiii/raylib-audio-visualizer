@@ -14,10 +14,6 @@ const int kWIndowHeight = 600;
 const char* kWindowTitle = "Raylib Audio Visualizer";
 const int kSamplesPerUpdate = 4096;
 
-// void callback(void *bufferData, unsigned int frames) {
-//   spdlog::info("callback", frames);
-// }
-
 void AudioVisualizer::run() {
   InitWindow(kWindowWidth, kWIndowHeight, kWindowTitle);
   InitAudioDevice();
@@ -39,7 +35,7 @@ void AudioVisualizer::run() {
 
     int width = GetScreenWidth();
     int height = GetScreenHeight();
-    float panel_height = 240;
+    float panel_height = 64;
     float wavepanel_height = 128;
 
     BeginDrawing();
@@ -163,9 +159,34 @@ void AudioVisualizer::run() {
 
     ImGui::SetNextWindowSize({ (float)width, panel_height });
     ImGui::SetNextWindowPos({ 0, (float)height - panel_height }, ImGuiCond_Always);
-    ImGui::Begin("Audio", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
-    if (samples) {
-      ImGui::PlotLines("Wave", samples, wave.frameCount * wave.channels, 0, nullptr, -1.0f, 1.0f);
+    ImGui::Begin("Audio", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar);
+
+    if (ImGui::Button(ICON_FA_BACKWARD_FAST)) {
+      spdlog::debug("Fast backward button pressed");
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(ICON_FA_BACKWARD_STEP)) {
+      spdlog::debug("Step backward button pressed");
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(ICON_FA_PLAY)) {
+      spdlog::debug("Play button pressed");
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(ICON_FA_PAUSE)) {
+      spdlog::debug("Pause button pressed");
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(ICON_FA_STOP)) {
+      spdlog::debug("Stop button pressed");
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(ICON_FA_FORWARD_STEP)) {
+      spdlog::debug("Fast forward button pressed");
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(ICON_FA_FORWARD_FAST)) {
+      spdlog::debug("Step forward button pressed");
     }
     ImGui::End();
 
