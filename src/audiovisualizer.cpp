@@ -1,11 +1,13 @@
 #include <array>
 #include <algorithm>
 #include <valarray>
+#include <vector>
 #include <raylib.h>
 #include <rlImGui.h>
 #include <imgui.h>
 #include <nfd.h>
 #include <spdlog/spdlog.h>
+#include <kiss_fft.h>
 
 #include "audiovisualizer.h"
 
@@ -13,7 +15,8 @@ const int kWindowWidth = 800;
 const int kWIndowHeight = 600;
 const char* kWindowTitle = "Raylib Audio Visualizer";
 const int kSamplesPerUpdate = 4096;
-const int kFFTSize = 128;
+const int kFFTSize = 1024;
+const int kBarWidth = 25;
 
 void AudioVisualizer::run() {
   InitWindow(kWindowWidth, kWIndowHeight, kWindowTitle);
@@ -23,6 +26,10 @@ void AudioVisualizer::run() {
   SetAudioStreamBufferSizeDefault(kSamplesPerUpdate);
   rlImGuiSetup(true);
 
+  kiss_fft_cfg cfg = kiss_fft_alloc(kFFTSize, 0, nullptr, nullptr);
+  std::vector<kiss_fft_cpx> fft_input(kFFTSize);
+  std::vector<kiss_fft_cpx> fft_output(kFFTSize);
+
   static bool should_close = false;
   static bool should_loop = true;
   static Wave wave;
@@ -30,12 +37,10 @@ void AudioVisualizer::run() {
   static float* samples = nullptr;
   static int wave_index = 0;
 
-  std::valarray<float> frequencies(kFFTSize);
+  std::valarray<float> frequencies(kFFTSize / 2);
   for (int i = 0; i < frequencies.size(); i++) {
     frequencies[i] = ((5 + i * 2) % 24) / 32.0f;
   }
-
-  spdlog::info("fft size {}", frequencies.size());
 
   while (!(WindowShouldClose() || should_close)) {
     Vector2 mouse = GetMousePosition();
@@ -51,15 +56,17 @@ void AudioVisualizer::run() {
     BeginDrawing();
     ClearBackground({ 57, 58, 75, 255 });
 
-    for (int i = 0; i < frequencies.size(); i++) {
-      float f = frequencies[i];
+    const int num_bars = width / kBarWidth;
+    const int freqs_per_bar = kFFTSize / num_bars / 2;
+    for (int i = 0; i < num_bars; i++) {
+      float f = std::valarray(frequencies[std::slice(i * freqs_per_bar, freqs_per_bar, 1)]).sum() / (float)freqs_per_bar;
 
-      float w = width / (float)kFFTSize;
+      int w = kBarWidth;
       int x = i * w;
       int h = f * spectrum_height;
       int y = spectrum_height - h;
 
-      DrawRectangle(x, y, std::max(1.0f, w), h, RED);
+      DrawRectangle(x, y, w, h, RED);
     }
 
     Vector2 wavepanel_min { 0, height - panel_height - wavepanel_height };
@@ -216,6 +223,8 @@ void AudioVisualizer::run() {
 
     if (samples && IsAudioStreamProcessed(stream)) {
       int samples_left = kSamplesPerUpdate;
+      int freq_wave_index = wave_index;
+
       while (samples_left) {
         int samples_to_write = std::min((int)wave.frameCount, wave_index + samples_left) - wave_index;
         UpdateAudioStream(stream, &samples[wave_index * wave.channels], samples_to_write);
@@ -228,6 +237,24 @@ void AudioVisualizer::run() {
           }
         }
       }
+
+      for (int i = 0; i < kFFTSize; i++) {
+        fft_input[i].r = samples[freq_wave_index * wave.channels];
+        fft_input[i].i = 0.0f;
+        freq_wave_index = (freq_wave_index + 1) % wave.frameCount;
+      }
+
+      kiss_fft(cfg, fft_input.data(), fft_output.data());
+
+      for (int i = 0; i < frequencies.size(); i++) {
+        frequencies[i] = std::sqrt(fft_output[i].r * fft_output[i].r + fft_output[i].i * fft_output[i].i);
+      }
+
+      float max_magnitude = frequencies.max();
+
+      for (int i = 0; i < frequencies.size(); i++) {
+        frequencies[i] = std::log(1 + frequencies[i]) / std::log(1 + max_magnitude);
+      }
     }
   }
 
@@ -238,6 +265,8 @@ void AudioVisualizer::run() {
     UnloadWaveSamples(samples);
     samples = nullptr;
   }
+
+  kiss_fft_free(cfg);
 
   rlImGuiShutdown();
   CloseAudioDevice();
