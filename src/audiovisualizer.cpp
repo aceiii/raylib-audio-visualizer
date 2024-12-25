@@ -29,6 +29,7 @@ void AudioVisualizer::run() {
   kiss_fft_cfg cfg = kiss_fft_alloc(kFFTSize, 0, nullptr, nullptr);
   std::vector<kiss_fft_cpx> fft_input(kFFTSize);
   std::vector<kiss_fft_cpx> fft_output(kFFTSize);
+  std::valarray<float> hanning(kFFTSize);
 
   Wave wave;
   AudioStream stream;
@@ -41,6 +42,11 @@ void AudioVisualizer::run() {
   for (int i = 0; i < frequencies.size(); i++) {
     frequencies[i] = ((5 + i * 2) % 24) / 32.0f;
   }
+
+  for (int i = 0; i < hanning.size(); i++) {
+    hanning[i] = 0.5 * (1 - std::cos((2 * M_PI * i) / (hanning.size() - 1)));
+  }
+
 
   while (!(WindowShouldClose() || should_close)) {
     Vector2 mouse = GetMousePosition();
@@ -126,9 +132,14 @@ void AudioVisualizer::run() {
 
             spdlog::info("Audio file loaded: {}", wav_path);
             wave = LoadWave(wav_path);
+
+            if (wave.sampleSize != 32) {
+              WaveFormat(&wave, wave.sampleRate, 32, wave.channels);
+            }
+
             samples = LoadWaveSamples(wave);
+            spdlog::info("wave sampleRate:{}, sampleSize:{}, channels:{}", wave.sampleRate, wave.sampleSize, wave.channels);
             stream = LoadAudioStream(wave.sampleRate, wave.sampleSize, wave.channels);
-            // SetAudioStreamCallback(stream, callback);
             wave_index = 0;
             PlayAudioStream(stream);
           } else if (NFD_CANCEL) {
@@ -219,6 +230,9 @@ void AudioVisualizer::run() {
     ImGui::End();
 
     rlImGuiEnd();
+
+    DrawFPS(width - 100, height - 24);
+
     EndDrawing();
 
     if (samples && IsAudioStreamProcessed(stream)) {
@@ -239,7 +253,7 @@ void AudioVisualizer::run() {
       }
 
       for (int i = 0; i < kFFTSize; i++) {
-        fft_input[i].r = samples[freq_wave_index * wave.channels];
+        fft_input[i].r = samples[freq_wave_index * wave.channels] * hanning[i];
         fft_input[i].i = 0.0f;
         freq_wave_index = (freq_wave_index + 1) % wave.frameCount;
       }
