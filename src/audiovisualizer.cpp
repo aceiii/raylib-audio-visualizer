@@ -1,6 +1,6 @@
-
 #include <array>
 #include <algorithm>
+#include <valarray>
 #include <raylib.h>
 #include <rlImGui.h>
 #include <imgui.h>
@@ -13,6 +13,7 @@ const int kWindowWidth = 800;
 const int kWIndowHeight = 600;
 const char* kWindowTitle = "Raylib Audio Visualizer";
 const int kSamplesPerUpdate = 4096;
+const int kFFTSize = 128;
 
 void AudioVisualizer::run() {
   InitWindow(kWindowWidth, kWIndowHeight, kWindowTitle);
@@ -29,17 +30,37 @@ void AudioVisualizer::run() {
   static float* samples = nullptr;
   static int wave_index = 0;
 
+  std::valarray<float> frequencies(kFFTSize);
+  for (int i = 0; i < frequencies.size(); i++) {
+    frequencies[i] = ((5 + i * 2) % 24) / 32.0f;
+  }
+
+  spdlog::info("fft size {}", frequencies.size());
+
   while (!(WindowShouldClose() || should_close)) {
     Vector2 mouse = GetMousePosition();
     Vector2 mouse_delta = GetMouseDelta();
 
     int width = GetScreenWidth();
     int height = GetScreenHeight();
+    float menu_height = 32;
     float panel_height = 64;
     float wavepanel_height = 128;
+    float spectrum_height = height - panel_height - wavepanel_height; // - menu_height;
 
     BeginDrawing();
     ClearBackground({ 57, 58, 75, 255 });
+
+    for (int i = 0; i < frequencies.size(); i++) {
+      float f = frequencies[i];
+
+      float w = width / (float)kFFTSize;
+      int x = i * w;
+      int h = f * spectrum_height;
+      int y = spectrum_height - h;
+
+      DrawRectangle(x, y, std::max(1.0f, w), h, RED);
+    }
 
     Vector2 wavepanel_min { 0, height - panel_height - wavepanel_height };
     Vector2 wavepanel_max { (float)width, height - panel_height };
