@@ -17,6 +17,9 @@ set(SOURCE_FILES
 )
 
 set(ARGPARSE_BUILD_TESTS OFF)
+set(KISSFFT_STATIC ON)
+set(KISSFFT_TEST OFF)
+set(KISSFFT_TOOLS OFF)
 
 include(cmake/raylib.cmake)
 include(cmake/rlimgui.cmake)
@@ -27,6 +30,7 @@ add_subdirectory(external/argparse)
 add_subdirectory(external/magic_enum)
 add_subdirectory(external/nativefiledialog-extended)
 add_subdirectory(external/tomlplusplus)
+add_subdirectory(external/kissfft)
 
 add_executable(${EXE_NAME} ${SOURCE_FILES})
 
@@ -36,6 +40,7 @@ target_link_libraries(${EXE_NAME} magic_enum)
 target_link_libraries(${EXE_NAME} rlimgui)
 target_link_libraries(${EXE_NAME} nfd)
 target_link_libraries(${EXE_NAME} tomlplusplus::tomlplusplus)
+target_link_libraries(${EXE_NAME} kissfft)
 
 target_include_directories(${EXE_NAME} PUBLIC external/rlimgui)
 
