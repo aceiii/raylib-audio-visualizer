@@ -30,12 +30,12 @@ void AudioVisualizer::run() {
   std::vector<kiss_fft_cpx> fft_input(kFFTSize);
   std::vector<kiss_fft_cpx> fft_output(kFFTSize);
 
-  static bool should_close = false;
-  static bool should_loop = true;
-  static Wave wave;
-  static AudioStream stream;
-  static float* samples = nullptr;
-  static int wave_index = 0;
+  Wave wave;
+  AudioStream stream;
+  bool should_close = false;
+  bool should_loop = true;
+  float* samples = nullptr;
+  int wave_index = 0;
 
   std::valarray<float> frequencies(kFFTSize / 2);
   for (int i = 0; i < frequencies.size(); i++) {
