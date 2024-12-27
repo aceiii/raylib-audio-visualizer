@@ -47,6 +47,14 @@ void AudioVisualizer::run() {
     hanning[i] = 0.5 * (1 - std::cos((2 * M_PI * i) / (hanning.size() - 1)));
   }
 
+  float menu_height = 32;
+  float panel_height = 64;
+  float wavepanel_height = 128;
+
+  RenderTexture2D waveform_texture = LoadRenderTexture(kWindowWidth, wavepanel_height);
+  BeginTextureMode(waveform_texture);
+  ClearBackground(BLACK);
+  EndTextureMode();
 
   while (!(WindowShouldClose() || should_close)) {
     Vector2 mouse = GetMousePosition();
@@ -54,9 +62,6 @@ void AudioVisualizer::run() {
 
     int width = GetScreenWidth();
     int height = GetScreenHeight();
-    float menu_height = 32;
-    float panel_height = 64;
-    float wavepanel_height = 128;
     float spectrum_height = height - panel_height - wavepanel_height; // - menu_height;
 
     BeginDrawing();
@@ -78,24 +83,9 @@ void AudioVisualizer::run() {
     Vector2 wavepanel_min { 0, height - panel_height - wavepanel_height };
     Vector2 wavepanel_max { (float)width, height - panel_height };
 
-    DrawRectangle(wavepanel_min.x, wavepanel_min.y, width, wavepanel_height, BLACK);
-    if (samples != nullptr) {
-      int base_y = wavepanel_max.y - (wavepanel_height / 2);
+    DrawTexture(waveform_texture.texture, 0, wavepanel_min.y, WHITE);
+    if (samples) {
       int frame_count = wave.frameCount;
-      float scale_y = (wavepanel_height / 2) * 0.75;
-      float frames_per_pixel = (float)frame_count / width;
-
-      int dx = 1;
-      for (int x = 0; x < width; x += dx) {
-        int sample_index1 = (int)(frames_per_pixel * x) * wave.channels;
-        int sample_index2 = (int)(frames_per_pixel * (x + dx)) * wave.channels;
-
-        const auto [min, max] = std::minmax_element(&samples[sample_index1], &samples[sample_index2]);
-        float min_sample = std::min(0.0f, *min) * scale_y;
-        float max_sample = std::max(0.0f, *max) * scale_y;
-        DrawRectangle(x, base_y - max_sample, dx, max_sample - min_sample, WHITE);
-      }
-
       float pct = (float)wave_index / frame_count;
       int bar_x = width * pct;
       DrawLine(bar_x, height - panel_height - wavepanel_height, bar_x, height - panel_height, RED);
@@ -129,7 +119,6 @@ void AudioVisualizer::run() {
               wave_index = 0;
             }
 
-
             spdlog::info("Audio file loaded: {}", wav_path);
             wave = LoadWave(wav_path);
 
@@ -138,6 +127,39 @@ void AudioVisualizer::run() {
             }
 
             samples = LoadWaveSamples(wave);
+
+            spdlog::info("Generating waveform texture");
+            BeginTextureMode(waveform_texture);
+            ClearBackground(BLACK);
+
+            int base_y = (wavepanel_height / 2);
+            int frame_count = wave.frameCount;
+            float scale_y = (wavepanel_height / 2) * 0.75;
+            float frames_per_pixel = (float)frame_count / width;
+
+            int dx = 1;
+            for (int x = 0; x < width; x += dx) {
+              int sample_index1 = (int)(frames_per_pixel * x) * wave.channels;
+              int sample_index2 = (int)(frames_per_pixel * (x + dx)) * wave.channels;
+
+              const auto [min, max] = std::minmax_element(&samples[sample_index1], &samples[sample_index2]);
+              float min_sample = std::min(0.0f, *min) * scale_y;
+              float max_sample = std::max(0.0f, *max) * scale_y;
+              DrawRectangle(x, base_y - max_sample, dx, max_sample - min_sample, WHITE);
+            }
+
+            float pct = (float)wave_index / frame_count;
+            int bar_x = width * pct;
+            DrawLine(bar_x, height - panel_height - wavepanel_height, bar_x, height - panel_height, RED);
+
+            if (mouse.y >= wavepanel_min.y && mouse.y < wavepanel_max.y) {
+              if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) || (IsMouseButtonDown(MOUSE_LEFT_BUTTON) && (mouse_delta.x || mouse_delta.y))) {
+                float pct = (float)mouse.x / width;
+                wave_index = pct * frame_count;
+              }
+            }
+            EndTextureMode();
+
             spdlog::info("wave sampleRate:{}, sampleSize:{}, channels:{}", wave.sampleRate, wave.sampleSize, wave.channels);
             stream = LoadAudioStream(wave.sampleRate, wave.sampleSize, wave.channels);
             wave_index = 0;
@@ -156,6 +178,10 @@ void AudioVisualizer::run() {
           UnloadWaveSamples(samples);
           samples = nullptr;
           wave_index = 0;
+
+          BeginTextureMode(waveform_texture);
+          ClearBackground(BLACK);
+          EndTextureMode();
         }
         ImGui::Separator();
         if (ImGui::MenuItem("Quit")) {
@@ -281,6 +307,8 @@ void AudioVisualizer::run() {
   }
 
   kiss_fft_free(cfg);
+
+  UnloadRenderTexture(waveform_texture);
 
   rlImGuiShutdown();
   CloseAudioDevice();
