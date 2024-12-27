@@ -15,7 +15,7 @@ const int kWindowWidth = 800;
 const int kWIndowHeight = 600;
 const char* kWindowTitle = "Raylib Audio Visualizer";
 const int kSamplesPerUpdate = 4096;
-const int kFFTSize = 1024;
+const int kFFTSize = 4096;
 const int kBarWidth = 25;
 
 void AudioVisualizer::run() {
