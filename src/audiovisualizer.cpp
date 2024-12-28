@@ -38,9 +38,17 @@ void AudioVisualizer::run() {
   float* samples = nullptr;
   int wave_index = 0;
 
-  std::valarray<float> frequencies(kFFTSize / 2);
+  const int num_bars = kWindowWidth / kBarWidth;
+  const int freqs_per_bar = kFFTSize / num_bars / 2;
+
+  std::valarray<float> frequencies(num_bars);
+  std::valarray<float> max_frequencies(num_bars);
+  std::valarray<float> fall_velocity(num_bars);
+
   for (int i = 0; i < frequencies.size(); i++) {
-    frequencies[i] = ((5 + i * 2) % 24) / 32.0f;
+    frequencies[i] = 0;
+    max_frequencies[i] = 0;
+    fall_velocity[i] = 0;
   }
 
   for (int i = 0; i < hanning.size(); i++) {
@@ -69,17 +77,27 @@ void AudioVisualizer::run() {
 
     DrawRectangle(0, spectrum_height - 2, width, 2, RED);
 
-    const int num_bars = width / kBarWidth;
-    const int freqs_per_bar = kFFTSize / num_bars / 2;
-    for (int i = 0; i < num_bars; i++) {
-      float f = std::valarray(frequencies[std::slice(i * freqs_per_bar, freqs_per_bar, 1)]).sum() / (float)freqs_per_bar;
-
+    for (int i = 0; i < frequencies.size(); i++) {
+      float f = frequencies[i];
       int w = kBarWidth;
       int x = i * w;
-      int h = 2 + (std::log(1 + (f / 8)) * spectrum_height * 8);
+      int h = f * spectrum_height;
       int y = spectrum_height - h;
 
-      DrawRectangleGradientV(x, y, w, h, GOLD, RED);
+      DrawRectangleGradientV(x, y, w, h, ORANGE, RED);
+    }
+
+    for (int i = 0; i < max_frequencies.size(); i++) {
+      fall_velocity[i] += GetFrameTime() * 2;
+      float f = std::max(0.0f, std::max(max_frequencies[i] - (GetFrameTime() * fall_velocity[i]), frequencies[i]));
+      if (f >= max_frequencies[i]) {
+        fall_velocity[i] = 0;
+      }
+      max_frequencies[i] = f;
+
+      int h = 3;
+      int y = spectrum_height - (f * spectrum_height);
+      DrawRectangle(i * kBarWidth, y, kBarWidth, h, GOLD);
     }
 
     Vector2 wavepanel_min { 0, height - panel_height - wavepanel_height };
@@ -180,6 +198,10 @@ void AudioVisualizer::run() {
           UnloadWaveSamples(samples);
           samples = nullptr;
           wave_index = 0;
+
+          for (int i = 0; i < frequencies.size(); i++) {
+            frequencies[i] = 0;
+          }
 
           BeginTextureMode(waveform_texture);
           ClearBackground(BLACK);
@@ -289,13 +311,26 @@ void AudioVisualizer::run() {
       kiss_fft(cfg, fft_input.data(), fft_output.data());
 
       for (int i = 0; i < frequencies.size(); i++) {
-        frequencies[i] = std::sqrt(fft_output[i].r * fft_output[i].r + fft_output[i].i * fft_output[i].i);
+        frequencies[i] = 0;
       }
 
-      float max_magnitude = frequencies.max();
+      float max_magnitude = 0;
+      for (int i = 0; i < fft_output.size(); i++) {
+        auto& out = fft_output[i];
+        out.r = std::sqrt(out.r * out.r + out.i * out.i);
+        max_magnitude = std::max(max_magnitude, out.r);
+      }
 
       for (int i = 0; i < frequencies.size(); i++) {
-        frequencies[i] = std::log(1 + frequencies[i]) / std::log(1 + max_magnitude);
+        for (int j = 0; j < freqs_per_bar; j++) {
+          float magnitude = fft_output[(i * freqs_per_bar) + j].r;
+          float f = std::clamp(std::log(1 + magnitude) / std::log(1 + max_magnitude), 0.f, 1.f);
+          frequencies[i] += f;
+        }
+      }
+
+      for (int i = 0; i < frequencies.size(); i++) {
+        frequencies[i] /= (float)freqs_per_bar;
       }
     }
   }
