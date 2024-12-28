@@ -67,6 +67,8 @@ void AudioVisualizer::run() {
     BeginDrawing();
     ClearBackground({ 57, 58, 75, 255 });
 
+    DrawRectangle(0, spectrum_height - 2, width, 2, RED);
+
     const int num_bars = width / kBarWidth;
     const int freqs_per_bar = kFFTSize / num_bars / 2;
     for (int i = 0; i < num_bars; i++) {
@@ -74,10 +76,10 @@ void AudioVisualizer::run() {
 
       int w = kBarWidth;
       int x = i * w;
-      int h = f * spectrum_height;
+      int h = 2 + (std::log(1 + (f / 8)) * spectrum_height * 8);
       int y = spectrum_height - h;
 
-      DrawRectangle(x, y, w, h, RED);
+      DrawRectangleGradientV(x, y, w, h, GOLD, RED);
     }
 
     Vector2 wavepanel_min { 0, height - panel_height - wavepanel_height };
