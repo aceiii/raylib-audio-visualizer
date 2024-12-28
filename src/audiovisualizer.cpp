@@ -34,6 +34,7 @@ void AudioVisualizer::run() {
 
   Wave wave;
   AudioStream stream;
+  bool auto_play = true;
   bool should_close = false;
   bool should_loop = true;
   float* samples = nullptr;
@@ -237,7 +238,10 @@ void AudioVisualizer::run() {
             spdlog::info("wave sampleRate:{}, sampleSize:{}, channels:{}", wave.sampleRate, wave.sampleSize, wave.channels);
             stream = LoadAudioStream(wave.sampleRate, wave.sampleSize, wave.channels);
             wave_index = 0;
-            PlayAudioStream(stream);
+
+            if (auto_play) {
+              PlayAudioStream(stream);
+            }
           } else if (NFD_CANCEL) {
             spdlog::info("Load cancelled by user.");
           } else {
@@ -281,6 +285,8 @@ void AudioVisualizer::run() {
       }
 
       if (ImGui::BeginMenu("Audio")) {
+        ImGui::MenuItem("Audo-Play", nullptr, &auto_play);
+        ImGui::Separator();
         ImGui::MenuItem("Loop", nullptr, &should_loop);
         if (ImGui::MenuItem("Play", nullptr, false, samples != nullptr && !IsAudioStreamPlaying(stream))) {
           PlayAudioStream(stream);
