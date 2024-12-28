@@ -16,7 +16,7 @@ const int kWIndowHeight = 600;
 const char* kWindowTitle = "Raylib Audio Visualizer";
 const int kSamplesPerUpdate = 4096;
 const int kFFTSize = 4096;
-const int kBarWidth = 25;
+const int kBarWidth = 20;
 
 void AudioVisualizer::run() {
   InitWindow(kWindowWidth, kWIndowHeight, kWindowTitle);
@@ -74,6 +74,23 @@ void AudioVisualizer::run() {
 
     BeginDrawing();
     ClearBackground({ 57, 58, 75, 255 });
+
+    if (samples) {
+      for (int i = 0; i < kWindowWidth / 2; i+= 1) {
+        int idx = wave_index + i;
+        if (idx + 1 >= wave.frameCount) {
+          break;
+        }
+
+        const float scale = (spectrum_height / 2) * 0.86;
+        float s1 = samples[idx * wave.channels];
+        float s2 = samples[(idx + 1) * wave.channels];
+        int mid_y = spectrum_height / 2;
+
+
+        DrawLine(i * 2, mid_y + (s1 * scale), (i + 1) * 2, mid_y + (s2 * scale), RAYWHITE);
+      }
+    }
 
     DrawRectangle(0, spectrum_height - 2, width, 2, RED);
 
