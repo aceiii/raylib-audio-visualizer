@@ -32,11 +32,14 @@ void AudioVisualizer::run() {
   std::vector<kiss_fft_cpx> fft_output(kFFTSize);
   std::valarray<float> hanning(kFFTSize);
 
-  Wave wave;
-  AudioStream stream;
   bool auto_play = true;
   bool should_close = false;
   bool should_loop = true;
+  bool show_about = false;
+  bool show_demo = false;
+
+  Wave wave;
+  AudioStream stream;
   float* samples = nullptr;
   int wave_index = 0;
 
@@ -315,6 +318,13 @@ void AudioVisualizer::run() {
         ImGui::EndMenu();
       }
 
+      if (ImGui::BeginMenu("Help")) {
+        ImGui::MenuItem("About", nullptr, &show_about);
+        ImGui::Separator();
+        ImGui::MenuItem("Demo", nullptr, &show_demo);
+        ImGui::EndMenu();
+      }
+
       ImGui::EndMainMenuBar();
     }
 
@@ -407,6 +417,31 @@ void AudioVisualizer::run() {
 
     ImGui::PopStyleVar();
     ImGui::PopStyleVar();
+
+    if (show_about) {
+      if (ImGui::Begin("About Audio Visualizer", &show_about)) {
+        ImGui::Text("This application was created for fun and educational purposes.");
+        ImGui::Text("Developed by AceIII");
+        ImGui::SameLine();
+        ImGui::TextLinkOpenURL("https://github.com/aceiii");
+        ImGui::NewLine();
+        ImGui::Text("Uses the following libraries:");
+        ImGui::BulletText("Raylib");
+        ImGui::BulletText("Dear ImGui");
+        ImGui::BulletText("KissFFT");
+        ImGui::BulletText("rlImGui");
+        ImGui::BulletText("ArgParse");
+        ImGui::BulletText("SpdLog");
+        ImGui::BulletText("Magic Enum");
+        ImGui::BulletText("NativeFileDialog-extended");
+        ImGui::BulletText("toml++");
+      }
+      ImGui::End();
+    }
+
+    if (show_demo) {
+      ImGui::ShowDemoWindow(&show_demo);
+    }
 
     ImGui::End();
 
