@@ -323,8 +323,9 @@ void AudioVisualizer::run() {
 
       for (int i = 0; i < frequencies.size(); i++) {
         for (int j = 0; j < freqs_per_bar; j++) {
+          const float scale_magnitude = 16.f;
           float magnitude = fft_output[(i * freqs_per_bar) + j].r;
-          float f = std::clamp(std::log(1 + magnitude) / std::log(1 + max_magnitude), 0.f, 1.f);
+          float f = std::clamp(std::log(1 + magnitude * scale_magnitude) / std::log(1 + max_magnitude * scale_magnitude), 0.f, 1.f);
           frequencies[i] += f;
         }
       }
