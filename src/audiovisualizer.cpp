@@ -5,6 +5,7 @@
 #include <raylib.h>
 #include <rlImGui.h>
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <nfd.h>
 #include <spdlog/spdlog.h>
 #include <kiss_fft.h>
@@ -311,37 +312,96 @@ void AudioVisualizer::run() {
       ImGui::EndMainMenuBar();
     }
 
+    auto push_disabled_btn_flags = []() {
+      ImGui::PushItemFlag(ImGuiItemFlags_Disabled, true);
+      ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.5f, 0.5f, 0.5f, 0.5f));
+    };
+
+    auto pop_disabled_btn_flags = []() {
+      ImGui::PopItemFlag();
+      ImGui::PopStyleColor();
+    };
+
+    const bool is_playing = IsAudioStreamPlaying(stream);
+
+    ImGuiStyle &style = ImGui::GetStyle();
+
     ImGui::SetNextWindowSize({ (float)width, panel_height });
     ImGui::SetNextWindowPos({ 0, (float)height - panel_height }, ImGuiCond_Always);
     ImGui::Begin("Audio", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar);
 
+    ImVec2 frame_padding(16.0f, 12.0f);
+
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, frame_padding);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+
+    if (!samples) {
+      push_disabled_btn_flags();
+    }
+
     if (ImGui::Button(ICON_FA_BACKWARD_FAST)) {
       spdlog::debug("Fast backward button pressed");
+      wave_index = std::clamp(wave_index - ((int)wave.sampleRate * 30), 0, (int)wave.frameCount);
     }
     ImGui::SameLine();
     if (ImGui::Button(ICON_FA_BACKWARD_STEP)) {
       spdlog::debug("Step backward button pressed");
+      wave_index = std::clamp(wave_index - ((int)wave.sampleRate * 10), 0, (int)wave.frameCount);
     }
+
     ImGui::SameLine();
+    if (is_playing) {
+      push_disabled_btn_flags();
+    }
+
     if (ImGui::Button(ICON_FA_PLAY)) {
       spdlog::debug("Play button pressed");
+      PlayAudioStream(stream);
     }
+
+    if (is_playing) {
+      pop_disabled_btn_flags();
+    }
+
     ImGui::SameLine();
+    if (!is_playing) {
+      push_disabled_btn_flags();
+    }
+
     if (ImGui::Button(ICON_FA_PAUSE)) {
       spdlog::debug("Pause button pressed");
+      StopAudioStream(stream);
     }
+
+    if (!is_playing) {
+      pop_disabled_btn_flags();
+    }
+
     ImGui::SameLine();
     if (ImGui::Button(ICON_FA_STOP)) {
       spdlog::debug("Stop button pressed");
+      StopAudioStream(stream);
+      wave_index = 0;
     }
+
     ImGui::SameLine();
     if (ImGui::Button(ICON_FA_FORWARD_STEP)) {
       spdlog::debug("Fast forward button pressed");
+      wave_index = std::clamp(wave_index + ((int)wave.sampleRate * 10), 0, (int)wave.frameCount);
     }
     ImGui::SameLine();
     if (ImGui::Button(ICON_FA_FORWARD_FAST)) {
       spdlog::debug("Step forward button pressed");
+      wave_index = std::clamp(wave_index + ((int)wave.sampleRate * 30), 0, (int)wave.frameCount);
     }
+
+    if (!samples) {
+      pop_disabled_btn_flags();
+    }
+
+    ImGui::PopStyleVar();
+    ImGui::PopStyleVar();
+
     ImGui::End();
 
     rlImGuiEnd();
