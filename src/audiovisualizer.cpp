@@ -62,6 +62,19 @@ void AudioVisualizer::run() {
   RenderTexture2D waveform_texture = LoadRenderTexture(kWindowWidth, wavepanel_height);
   BeginTextureMode(waveform_texture);
   ClearBackground(BLACK);
+
+  int half_wavepanel_height = wavepanel_height / 2;
+  DrawLine(0, half_wavepanel_height, kWindowWidth, half_wavepanel_height, DARKGRAY);
+  DrawLine(0, half_wavepanel_height - 8, kWindowWidth, half_wavepanel_height - 8, DARKGRAY);
+  DrawLine(0, half_wavepanel_height - 24, kWindowWidth, half_wavepanel_height - 24, DARKGRAY);
+  DrawLine(0, half_wavepanel_height - 48, kWindowWidth, half_wavepanel_height - 48, DARKGRAY);
+  DrawLine(0, half_wavepanel_height + 8, kWindowWidth, half_wavepanel_height + 8, DARKGRAY);
+  DrawLine(0, half_wavepanel_height + 24, kWindowWidth, half_wavepanel_height + 24, DARKGRAY);
+  DrawLine(0, half_wavepanel_height + 48, kWindowWidth, half_wavepanel_height + 48, DARKGRAY);
+
+  for (int i = 0; i < kWindowWidth; i += 40) {
+    DrawLine(i, 0, i, wavepanel_height, DARKGRAY);
+  }
   EndTextureMode();
 
   while (!(WindowShouldClose() || should_close)) {
@@ -125,7 +138,17 @@ void AudioVisualizer::run() {
       int frame_count = wave.frameCount;
       float pct = (float)wave_index / frame_count;
       int bar_x = width * pct;
-      DrawLine(bar_x, height - panel_height - wavepanel_height, bar_x, height - panel_height, RED);
+
+      DrawRectangle(bar_x, height - panel_height - wavepanel_height, 1, 2 * panel_height, RED);
+
+      Vector2 v1 { (float)bar_x - 4, (float)height - panel_height - wavepanel_height };
+      Vector2 v2 { (float)bar_x, (float)height - panel_height - wavepanel_height + 8};
+      Vector2 v3 { (float)bar_x + 4, (float)height - panel_height - wavepanel_height};
+      Vector2 v4 { (float)bar_x - 4, (float)height - panel_height };
+      Vector2 v5 { (float)bar_x + 4, (float)height - panel_height };
+      Vector2 v6 { (float)bar_x, (float)height - panel_height - 8 };
+      DrawTriangle(v1, v2, v3, RED);
+      DrawTriangle(v4, v5, v6, RED);
 
       if (mouse.y >= wavepanel_min.y && mouse.y < wavepanel_max.y) {
         if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) || (IsMouseButtonDown(MOUSE_LEFT_BUTTON) && (mouse_delta.x || mouse_delta.y))) {
@@ -168,6 +191,19 @@ void AudioVisualizer::run() {
             spdlog::info("Generating waveform texture");
             BeginTextureMode(waveform_texture);
             ClearBackground(BLACK);
+
+            int half_wavepanel_height = wavepanel_height / 2;
+            DrawLine(0, half_wavepanel_height, kWindowWidth, half_wavepanel_height, DARKGRAY);
+            DrawLine(0, half_wavepanel_height - 8, kWindowWidth, half_wavepanel_height - 8, DARKGRAY);
+            DrawLine(0, half_wavepanel_height - 24, kWindowWidth, half_wavepanel_height - 24, DARKGRAY);
+            DrawLine(0, half_wavepanel_height - 48, kWindowWidth, half_wavepanel_height - 48, DARKGRAY);
+            DrawLine(0, half_wavepanel_height + 8, kWindowWidth, half_wavepanel_height + 8, DARKGRAY);
+            DrawLine(0, half_wavepanel_height + 24, kWindowWidth, half_wavepanel_height + 24, DARKGRAY);
+            DrawLine(0, half_wavepanel_height + 48, kWindowWidth, half_wavepanel_height + 48, DARKGRAY);
+
+            for (int i = 0; i < kWindowWidth; i += 40) {
+              DrawLine(i, 0, i, wavepanel_height, DARKGRAY);
+            }
 
             int base_y = (wavepanel_height / 2);
             int frame_count = wave.frameCount;
@@ -222,6 +258,18 @@ void AudioVisualizer::run() {
 
           BeginTextureMode(waveform_texture);
           ClearBackground(BLACK);
+          int half_wavepanel_height = wavepanel_height / 2;
+          DrawLine(0, half_wavepanel_height, kWindowWidth, half_wavepanel_height, DARKGRAY);
+          DrawLine(0, half_wavepanel_height - 8, kWindowWidth, half_wavepanel_height - 8, DARKGRAY);
+          DrawLine(0, half_wavepanel_height - 24, kWindowWidth, half_wavepanel_height - 24, DARKGRAY);
+          DrawLine(0, half_wavepanel_height - 48, kWindowWidth, half_wavepanel_height - 48, DARKGRAY);
+          DrawLine(0, half_wavepanel_height + 8, kWindowWidth, half_wavepanel_height + 8, DARKGRAY);
+          DrawLine(0, half_wavepanel_height + 24, kWindowWidth, half_wavepanel_height + 24, DARKGRAY);
+          DrawLine(0, half_wavepanel_height + 48, kWindowWidth, half_wavepanel_height + 48, DARKGRAY);
+
+          for (int i = 0; i < kWindowWidth; i += 40) {
+            DrawLine(i, 0, i, wavepanel_height, DARKGRAY);
+          }
           EndTextureMode();
         }
         ImGui::Separator();
