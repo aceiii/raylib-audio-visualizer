@@ -152,7 +152,7 @@ void AudioVisualizer::run() {
 
       if (mouse.y >= wavepanel_min.y && mouse.y < wavepanel_max.y) {
         if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) || (IsMouseButtonDown(MOUSE_LEFT_BUTTON) && (mouse_delta.x || mouse_delta.y))) {
-          float pct = (float)mouse.x / width;
+          float pct = std::clamp((float)mouse.x / width, 0.f, 1.f);
           wave_index = pct * frame_count;
         }
       }
@@ -350,19 +350,20 @@ void AudioVisualizer::run() {
 
     EndDrawing();
 
-    if (samples && IsAudioStreamProcessed(stream)) {
+    if (samples) {
       int samples_left = kSamplesPerUpdate;
       int freq_wave_index = wave_index;
-
-      while (samples_left) {
-        int samples_to_write = std::min((int)wave.frameCount, wave_index + samples_left) - wave_index;
-        UpdateAudioStream(stream, &samples[wave_index * wave.channels], samples_to_write);
-        wave_index += samples_to_write;
-        samples_left -= samples_to_write;
-        if (wave_index >= wave.frameCount) {
-          wave_index = 0;
-          if (!should_loop) {
-            StopAudioStream(stream);
+      if (IsAudioStreamPlaying(stream) && IsAudioStreamProcessed(stream)) {
+        while (samples_left) {
+          int samples_to_write = std::min((int)wave.frameCount, wave_index + samples_left) - wave_index;
+          UpdateAudioStream(stream, &samples[wave_index * wave.channels], samples_to_write);
+          wave_index += samples_to_write;
+          samples_left -= samples_to_write;
+          if (wave_index >= wave.frameCount) {
+            wave_index = 0;
+            if (!should_loop) {
+              StopAudioStream(stream);
+            }
           }
         }
       }
