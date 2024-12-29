@@ -119,7 +119,17 @@ void AudioVisualizer::run() {
       int h = f * spectrum_height;
       int y = spectrum_height - h;
 
-      DrawRectangleGradientV(x, y, w, h, ORANGE, RED);
+      //DrawRectangleGradientV(x, y, w, h, ORANGE, RED);
+
+      Color top_colour = ORANGE;
+      Color bottom_colour = RED;
+
+      if (f < 0.3f) {
+        top_colour = MAROON;
+        bottom_colour = SKYBLUE;
+      }
+
+      DrawRectangleGradientV(x, y, w, h, ColorLerp(top_colour, bottom_colour, f), bottom_colour);
     }
 
     for (int i = 0; i < max_frequencies.size(); i++) {
