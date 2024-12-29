@@ -1,5 +1,6 @@
 #include <array>
 #include <algorithm>
+#include <string>
 #include <valarray>
 #include <vector>
 #include <raylib.h>
@@ -18,6 +19,14 @@ const char* kWindowTitle = "Raylib Audio Visualizer";
 const int kSamplesPerUpdate = 4096;
 const int kFFTSize = 4096;
 const int kBarWidth = 20;
+
+std::string format_wave_timestamp(Wave &wave, int frame_index) {
+  int total_seconds = frame_index / wave.sampleRate;
+  int seconds = total_seconds % 60;
+  int minutes = total_seconds / 60;
+
+  return fmt::format("{:02}:{:02}", minutes, seconds);
+}
 
 void AudioVisualizer::run() {
   InitWindow(kWindowWidth, kWIndowHeight, kWindowTitle);
@@ -42,6 +51,7 @@ void AudioVisualizer::run() {
   AudioStream stream;
   float* samples = nullptr;
   int wave_index = 0;
+  std::string total_timestamp = "--:--";
 
   const int num_bars = kWindowWidth / kBarWidth;
   const int freqs_per_bar = kFFTSize / num_bars / 2;
@@ -192,6 +202,7 @@ void AudioVisualizer::run() {
               UnloadAudioStream(stream);
               UnloadWave(wave);
               wave_index = 0;
+              total_timestamp = "--:--";
             }
 
             spdlog::info("Audio file loaded: {}", wav_path);
@@ -251,6 +262,7 @@ void AudioVisualizer::run() {
             spdlog::info("wave sampleRate:{}, sampleSize:{}, channels:{}", wave.sampleRate, wave.sampleSize, wave.channels);
             stream = LoadAudioStream(wave.sampleRate, wave.sampleSize, wave.channels);
             wave_index = 0;
+            total_timestamp = format_wave_timestamp(wave, wave.frameCount);
 
             if (auto_play) {
               PlayAudioStream(stream);
@@ -427,6 +439,17 @@ void AudioVisualizer::run() {
 
     ImGui::PopStyleVar();
     ImGui::PopStyleVar();
+
+    ImGui::SameLine();
+
+    std::string current_timestamp;
+    if (samples) {
+      current_timestamp = format_wave_timestamp(wave, wave_index);
+    } else {
+      current_timestamp = "--:--";
+    }
+
+    ImGui::Text(fmt::format("{} / {}", current_timestamp, total_timestamp).c_str());
 
     if (show_about) {
       if (ImGui::Begin("About Audio Visualizer", &show_about)) {
