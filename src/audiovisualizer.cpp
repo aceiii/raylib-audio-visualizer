@@ -53,7 +53,7 @@ void AudioVisualizer::run() {
   bool should_loop = true;
   bool show_about = false;
   bool show_demo = false;
-  bool show_playlist = false;
+  bool show_playlist = true;
 
   std::vector<PlaylistItem> playlist;
 
@@ -292,7 +292,7 @@ void AudioVisualizer::run() {
               unload_wave();
 
               std::filesystem::path path{wav_path};
-              playlist.push_back({path, path.stem().string()});
+              playlist.push_back({path, path.stem().string(), true});
 
               load_wave(path);
             } else if (NFD_CANCEL) {
