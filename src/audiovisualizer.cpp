@@ -1,5 +1,6 @@
 #include <array>
 #include <algorithm>
+#include <filesystem>
 #include <string>
 #include <valarray>
 #include <vector>
@@ -12,6 +13,12 @@
 #include <kiss_fft.h>
 
 #include "audiovisualizer.h"
+
+struct PlaylistItem {
+  std::filesystem::path path;
+  std::string name;
+  bool is_playing;
+};
 
 const int kWindowWidth = 800;
 const int kWIndowHeight = 600;
@@ -46,6 +53,9 @@ void AudioVisualizer::run() {
   bool should_loop = true;
   bool show_about = false;
   bool show_demo = false;
+  bool show_playlist = false;
+
+  std::vector<PlaylistItem> playlist;
 
   Wave wave;
   AudioStream stream;
@@ -91,6 +101,90 @@ void AudioVisualizer::run() {
     DrawLine(i, 0, i, wavepanel_height, DARKGRAY);
   }
   EndTextureMode();
+
+  auto unload_wave = [&]() {
+    if (!samples) {
+      return;
+    }
+
+    spdlog::info("Unloading previous file.");
+    StopAudioStream(stream);
+    UnloadWaveSamples(samples);
+    samples = nullptr;
+    UnloadAudioStream(stream);
+    UnloadWave(wave);
+    wave_index = 0;
+    total_timestamp = "--:--";
+  };
+
+  auto load_wave = [&](const std::filesystem::path wav_path) {
+    int width = GetScreenWidth();
+    int height = GetScreenHeight();
+
+    spdlog::info("Audio file loaded: {}", wav_path.string());
+    wave = LoadWave(wav_path.c_str());
+
+    if (wave.sampleSize != 32) {
+      WaveFormat(&wave, wave.sampleRate, 32, wave.channels);
+    }
+
+    samples = LoadWaveSamples(wave);
+
+    spdlog::info("Generating waveform texture");
+    BeginTextureMode(waveform_texture);
+    {
+      ClearBackground(BLACK);
+
+      int half_wavepanel_height = wavepanel_height / 2;
+      DrawLine(0, half_wavepanel_height, kWindowWidth, half_wavepanel_height, DARKGRAY);
+      DrawLine(0, half_wavepanel_height - 8, kWindowWidth, half_wavepanel_height - 8, DARKGRAY);
+      DrawLine(0, half_wavepanel_height - 24, kWindowWidth, half_wavepanel_height - 24, DARKGRAY);
+      DrawLine(0, half_wavepanel_height - 48, kWindowWidth, half_wavepanel_height - 48, DARKGRAY);
+      DrawLine(0, half_wavepanel_height + 8, kWindowWidth, half_wavepanel_height + 8, DARKGRAY);
+      DrawLine(0, half_wavepanel_height + 24, kWindowWidth, half_wavepanel_height + 24, DARKGRAY);
+      DrawLine(0, half_wavepanel_height + 48, kWindowWidth, half_wavepanel_height + 48, DARKGRAY);
+
+      for (int i = 0; i < kWindowWidth; i += 40) {
+        DrawLine(i, 0, i, wavepanel_height, DARKGRAY);
+      }
+
+      int base_y = (wavepanel_height / 2);
+      int frame_count = wave.frameCount;
+      float scale_y = (wavepanel_height / 2) * 0.75;
+      float frames_per_pixel = (float)frame_count / width;
+
+      int dx = 1;
+      for (int x = 0; x < width; x += dx) {
+        int sample_index1 = (int)(frames_per_pixel * x) * wave.channels;
+        int sample_index2 = (int)(frames_per_pixel * (x + dx)) * wave.channels;
+
+        const auto [min, max] = std::minmax_element(&samples[sample_index1], &samples[sample_index2]);
+        float min_sample = std::min(0.0f, *min) * scale_y;
+        float max_sample = std::max(0.0f, *max) * scale_y;
+        DrawRectangle(x, base_y - max_sample, dx, max_sample - min_sample, WHITE);
+      }
+    }
+    EndTextureMode();
+
+    spdlog::info("wave sampleRate:{}, sampleSize:{}, channels:{}", wave.sampleRate, wave.sampleSize, wave.channels);
+    stream = LoadAudioStream(wave.sampleRate, wave.sampleSize, wave.channels);
+    wave_index = 0;
+    total_timestamp = format_wave_timestamp(wave, wave.frameCount);
+
+    if (auto_play) {
+      PlayAudioStream(stream);
+    }
+  };
+
+  auto push_disabled_btn_flags = []() {
+    ImGui::PushItemFlag(ImGuiItemFlags_Disabled, true);
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.5f, 0.5f, 0.5f, 0.5f));
+  };
+
+  auto pop_disabled_btn_flags = []() {
+    ImGui::PopItemFlag();
+    ImGui::PopStyleColor();
+  };
 
   while (!(WindowShouldClose() || should_close)) {
     Vector2 mouse = GetMousePosition();
@@ -184,40 +278,44 @@ void AudioVisualizer::run() {
     }
 
     rlImGuiBegin();
-    if (ImGui::BeginMainMenuBar()) {
-      if (ImGui::BeginMenu("File")) {
-        if (ImGui::MenuItem("Load Audio File")) {
-          nfdchar_t* wav_path = nullptr;
-          std::array<nfdfilteritem_t, 2> filter_items = {{
-            {"Wave", "wav"},
-            {"MP3", "mp3"}
-          }};
-          nfdresult_t result = NFD_OpenDialog(&wav_path, filter_items.data(), filter_items.size(), nullptr);
-          if (result == NFD_OKAY) {
-            if (samples) {
-              spdlog::info("Unloading previous file.");
-              StopAudioStream(stream);
-              UnloadWaveSamples(samples);
-              samples = nullptr;
-              UnloadAudioStream(stream);
-              UnloadWave(wave);
-              wave_index = 0;
-              total_timestamp = "--:--";
+    {
+      if (ImGui::BeginMainMenuBar()) {
+        if (ImGui::BeginMenu("File")) {
+          if (ImGui::MenuItem("Load Audio File")) {
+            nfdchar_t* wav_path = nullptr;
+            std::array<nfdfilteritem_t, 2> filter_items = {{
+              {"Wave", "wav"},
+              {"MP3", "mp3"}
+            }};
+            nfdresult_t result = NFD_OpenDialog(&wav_path, filter_items.data(), filter_items.size(), nullptr);
+            if (result == NFD_OKAY) {
+              unload_wave();
+
+              std::filesystem::path path{wav_path};
+              playlist.push_back({path, path.stem().string()});
+
+              load_wave(path);
+            } else if (NFD_CANCEL) {
+              spdlog::info("Load cancelled by user.");
+            } else {
+              spdlog::error("Loading failed: {}", NFD_GetError());
+            }
+          }
+          if (ImGui::MenuItem("Unload Audio File", nullptr, false, samples != nullptr)) {
+            spdlog::info("Unloading wave file");
+            StopAudioStream(stream);
+            UnloadWave(wave);
+            UnloadAudioStream(stream);
+            UnloadWaveSamples(samples);
+            samples = nullptr;
+            wave_index = 0;
+
+            for (int i = 0; i < frequencies.size(); i++) {
+              frequencies[i] = 0;
             }
 
-            spdlog::info("Audio file loaded: {}", wav_path);
-            wave = LoadWave(wav_path);
-
-            if (wave.sampleSize != 32) {
-              WaveFormat(&wave, wave.sampleRate, 32, wave.channels);
-            }
-
-            samples = LoadWaveSamples(wave);
-
-            spdlog::info("Generating waveform texture");
             BeginTextureMode(waveform_texture);
             ClearBackground(BLACK);
-
             int half_wavepanel_height = wavepanel_height / 2;
             DrawLine(0, half_wavepanel_height, kWindowWidth, half_wavepanel_height, DARKGRAY);
             DrawLine(0, half_wavepanel_height - 8, kWindowWidth, half_wavepanel_height - 8, DARKGRAY);
@@ -230,254 +328,230 @@ void AudioVisualizer::run() {
             for (int i = 0; i < kWindowWidth; i += 40) {
               DrawLine(i, 0, i, wavepanel_height, DARKGRAY);
             }
+            EndTextureMode();
+          }
+          ImGui::Separator();
+          if (ImGui::MenuItem("Quit")) {
+            should_close = true;
+          }
+          ImGui::EndMenu();
+        }
 
-            int base_y = (wavepanel_height / 2);
-            int frame_count = wave.frameCount;
-            float scale_y = (wavepanel_height / 2) * 0.75;
-            float frames_per_pixel = (float)frame_count / width;
+        if (ImGui::BeginMenu("Audio")) {
+          ImGui::MenuItem("Show Playlist", nullptr, &show_playlist);
+          ImGui::MenuItem("Audo-Play", nullptr, &auto_play);
+          ImGui::Separator();
+          ImGui::MenuItem("Loop", nullptr, &should_loop);
+          if (ImGui::MenuItem("Play", nullptr, false, samples != nullptr && !IsAudioStreamPlaying(stream))) {
+            PlayAudioStream(stream);
+          }
+          if (ImGui::MenuItem("Pause",  nullptr, false, samples != nullptr && IsAudioStreamPlaying(stream))) {
+            StopAudioStream(stream);
+          }
+          if (ImGui::MenuItem("Stop",  nullptr, false, samples != nullptr && IsAudioStreamPlaying(stream))) {
+            StopAudioStream(stream);
+            wave_index = 0;
+          }
+          ImGui::Separator();
+          if (ImGui::MenuItem("-30s", nullptr, false, samples != nullptr)) {
+            wave_index = std::clamp(wave_index - ((int)wave.sampleRate * 30), 0, (int)wave.frameCount);
+          }
+          if (ImGui::MenuItem("-10s", nullptr, false, samples != nullptr)) {
+            wave_index = std::clamp(wave_index - ((int)wave.sampleRate * 10), 0, (int)wave.frameCount);
+          }
+          if (ImGui::MenuItem("+10s", nullptr, false, samples != nullptr)) {
+            wave_index = std::clamp(wave_index + ((int)wave.sampleRate * 10), 0, (int)wave.frameCount);
+          }
+          if (ImGui::MenuItem("+30s", nullptr, false, samples != nullptr)) {
+            wave_index = std::clamp(wave_index + ((int)wave.sampleRate * 30), 0, (int)wave.frameCount);
+          }
 
-            int dx = 1;
-            for (int x = 0; x < width; x += dx) {
-              int sample_index1 = (int)(frames_per_pixel * x) * wave.channels;
-              int sample_index2 = (int)(frames_per_pixel * (x + dx)) * wave.channels;
+          ImGui::EndMenu();
+        }
 
-              const auto [min, max] = std::minmax_element(&samples[sample_index1], &samples[sample_index2]);
-              float min_sample = std::min(0.0f, *min) * scale_y;
-              float max_sample = std::max(0.0f, *max) * scale_y;
-              DrawRectangle(x, base_y - max_sample, dx, max_sample - min_sample, WHITE);
+        if (ImGui::BeginMenu("Help")) {
+          ImGui::MenuItem("About", nullptr, &show_about);
+          ImGui::Separator();
+          ImGui::MenuItem("Demo", nullptr, &show_demo);
+          ImGui::EndMenu();
+        }
+
+        ImGui::EndMainMenuBar();
+      }
+
+
+      const bool is_playing = IsAudioStreamPlaying(stream);
+
+      ImGuiStyle &style = ImGui::GetStyle();
+
+      ImGui::SetNextWindowSize({ (float)width, panel_height });
+      ImGui::SetNextWindowPos({ 0, (float)height - panel_height }, ImGuiCond_Always);
+      ImGui::Begin("Audio", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar);
+
+      ImVec2 frame_padding(16.0f, 12.0f);
+
+      ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, frame_padding);
+      ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+
+      if (!samples) {
+        push_disabled_btn_flags();
+      }
+
+      if (ImGui::Button(ICON_FA_BACKWARD_FAST)) {
+        spdlog::debug("Fast backward button pressed");
+        wave_index = std::clamp(wave_index - ((int)wave.sampleRate * 30), 0, (int)wave.frameCount);
+      }
+      ImGui::SameLine();
+      if (ImGui::Button(ICON_FA_BACKWARD_STEP)) {
+        spdlog::debug("Step backward button pressed");
+        wave_index = std::clamp(wave_index - ((int)wave.sampleRate * 10), 0, (int)wave.frameCount);
+      }
+
+      ImGui::SameLine();
+      if (is_playing) {
+        push_disabled_btn_flags();
+      }
+
+      if (ImGui::Button(ICON_FA_PLAY)) {
+        spdlog::debug("Play button pressed");
+        PlayAudioStream(stream);
+      }
+
+      if (is_playing) {
+        pop_disabled_btn_flags();
+      }
+
+      ImGui::SameLine();
+      if (!is_playing) {
+        push_disabled_btn_flags();
+      }
+
+      if (ImGui::Button(ICON_FA_PAUSE)) {
+        spdlog::debug("Pause button pressed");
+        StopAudioStream(stream);
+      }
+
+      if (!is_playing) {
+        pop_disabled_btn_flags();
+      }
+
+      ImGui::SameLine();
+      if (ImGui::Button(ICON_FA_STOP)) {
+        spdlog::debug("Stop button pressed");
+        StopAudioStream(stream);
+        wave_index = 0;
+      }
+
+      ImGui::SameLine();
+      if (ImGui::Button(ICON_FA_FORWARD_STEP)) {
+        spdlog::debug("Fast forward button pressed");
+        wave_index = std::clamp(wave_index + ((int)wave.sampleRate * 10), 0, (int)wave.frameCount);
+      }
+      ImGui::SameLine();
+      if (ImGui::Button(ICON_FA_FORWARD_FAST)) {
+        spdlog::debug("Step forward button pressed");
+        wave_index = std::clamp(wave_index + ((int)wave.sampleRate * 30), 0, (int)wave.frameCount);
+      }
+
+      if (!samples) {
+        pop_disabled_btn_flags();
+      }
+
+      ImGui::PopStyleVar();
+      ImGui::PopStyleVar();
+
+      ImGui::SameLine();
+
+      std::string current_timestamp;
+      if (samples) {
+        current_timestamp = format_wave_timestamp(wave, wave_index);
+      } else {
+        current_timestamp = "--:--";
+      }
+
+      ImGui::Text(fmt::format("{} / {}", current_timestamp, total_timestamp).c_str());
+
+      if (show_about) {
+        if (ImGui::Begin("About Audio Visualizer", &show_about)) {
+          ImGui::Text("This application was created for fun and educational purposes.");
+          ImGui::Text("Developed by AceIII");
+          ImGui::SameLine();
+          ImGui::TextLinkOpenURL("https://github.com/aceiii");
+          ImGui::NewLine();
+          ImGui::Text("Uses the following libraries:");
+          ImGui::BulletText("Raylib");
+          ImGui::BulletText("Dear ImGui");
+          ImGui::BulletText("KissFFT");
+          ImGui::BulletText("rlImGui");
+          ImGui::BulletText("ArgParse");
+          ImGui::BulletText("SpdLog");
+          ImGui::BulletText("Magic Enum");
+          ImGui::BulletText("NativeFileDialog-extended");
+          ImGui::BulletText("toml++");
+        }
+        ImGui::End();
+      }
+
+      if (show_playlist) {
+        if (ImGui::Begin("Playlist", &show_playlist)) {
+          if (ImGui::Button("Add")) {
+            nfdchar_t* wav_path = nullptr;
+            std::array<nfdfilteritem_t, 2> filter_items = {{
+              {"Wave", "wav"},
+              {"MP3", "mp3"}
+            }};
+            nfdresult_t result = NFD_OpenDialog(&wav_path, filter_items.data(), filter_items.size(), nullptr);
+            if (result == NFD_OKAY) {
+              std::filesystem::path path{wav_path};
+              playlist.push_back({path, path.stem().string()});
+            }
+          }
+          ImGui::SameLine();
+          if (ImGui::Button("Clear")) {
+          }
+
+          ImGui::BeginChild("#Inner");
+          for (int i = 0; i < playlist.size(); i += 1) {
+            auto &item = playlist[i];
+
+            ImGui::PushID(i);
+            ImGui::Text(item.name.c_str());
+            ImGui::SameLine();
+
+            if (item.is_playing) {
+              push_disabled_btn_flags();
             }
 
-            float pct = (float)wave_index / frame_count;
-            int bar_x = width * pct;
-            DrawLine(bar_x, height - panel_height - wavepanel_height, bar_x, height - panel_height, RED);
+            if (ImGui::SmallButton(ICON_FA_PLAY)) {
+              unload_wave();
+              load_wave(item.path);
+              item.is_playing = true;
 
-            if (mouse.y >= wavepanel_min.y && mouse.y < wavepanel_max.y) {
-              if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) || (IsMouseButtonDown(MOUSE_LEFT_BUTTON) && (mouse_delta.x || mouse_delta.y))) {
-                float pct = (float)mouse.x / width;
-                wave_index = pct * frame_count;
+              for (int j = 0; j < playlist.size(); j += 1) {
+                if (i == j) {
+                  continue;
+                }
+                playlist[j].is_playing = false;
               }
             }
-            EndTextureMode();
 
-            spdlog::info("wave sampleRate:{}, sampleSize:{}, channels:{}", wave.sampleRate, wave.sampleSize, wave.channels);
-            stream = LoadAudioStream(wave.sampleRate, wave.sampleSize, wave.channels);
-            wave_index = 0;
-            total_timestamp = format_wave_timestamp(wave, wave.frameCount);
-
-            if (auto_play) {
-              PlayAudioStream(stream);
+            if (item.is_playing) {
+              pop_disabled_btn_flags();
             }
-          } else if (NFD_CANCEL) {
-            spdlog::info("Load cancelled by user.");
-          } else {
-            spdlog::error("Loading failed: {}", NFD_GetError());
+
+            ImGui::PopID();
           }
+          ImGui::EndChild();
         }
-        if (ImGui::MenuItem("Unload Audio File", nullptr, false, samples != nullptr)) {
-          spdlog::info("Unloading wave file");
-          StopAudioStream(stream);
-          UnloadWave(wave);
-          UnloadAudioStream(stream);
-          UnloadWaveSamples(samples);
-          samples = nullptr;
-          wave_index = 0;
-
-          for (int i = 0; i < frequencies.size(); i++) {
-            frequencies[i] = 0;
-          }
-
-          BeginTextureMode(waveform_texture);
-          ClearBackground(BLACK);
-          int half_wavepanel_height = wavepanel_height / 2;
-          DrawLine(0, half_wavepanel_height, kWindowWidth, half_wavepanel_height, DARKGRAY);
-          DrawLine(0, half_wavepanel_height - 8, kWindowWidth, half_wavepanel_height - 8, DARKGRAY);
-          DrawLine(0, half_wavepanel_height - 24, kWindowWidth, half_wavepanel_height - 24, DARKGRAY);
-          DrawLine(0, half_wavepanel_height - 48, kWindowWidth, half_wavepanel_height - 48, DARKGRAY);
-          DrawLine(0, half_wavepanel_height + 8, kWindowWidth, half_wavepanel_height + 8, DARKGRAY);
-          DrawLine(0, half_wavepanel_height + 24, kWindowWidth, half_wavepanel_height + 24, DARKGRAY);
-          DrawLine(0, half_wavepanel_height + 48, kWindowWidth, half_wavepanel_height + 48, DARKGRAY);
-
-          for (int i = 0; i < kWindowWidth; i += 40) {
-            DrawLine(i, 0, i, wavepanel_height, DARKGRAY);
-          }
-          EndTextureMode();
-        }
-        ImGui::Separator();
-        if (ImGui::MenuItem("Quit")) {
-          should_close = true;
-        }
-        ImGui::EndMenu();
+        ImGui::End();
       }
 
-      if (ImGui::BeginMenu("Audio")) {
-        ImGui::MenuItem("Audo-Play", nullptr, &auto_play);
-        ImGui::Separator();
-        ImGui::MenuItem("Loop", nullptr, &should_loop);
-        if (ImGui::MenuItem("Play", nullptr, false, samples != nullptr && !IsAudioStreamPlaying(stream))) {
-          PlayAudioStream(stream);
-        }
-        if (ImGui::MenuItem("Pause",  nullptr, false, samples != nullptr && IsAudioStreamPlaying(stream))) {
-          StopAudioStream(stream);
-        }
-        if (ImGui::MenuItem("Stop",  nullptr, false, samples != nullptr && IsAudioStreamPlaying(stream))) {
-          StopAudioStream(stream);
-          wave_index = 0;
-        }
-        ImGui::Separator();
-        if (ImGui::MenuItem("-30s", nullptr, false, samples != nullptr)) {
-          wave_index = std::clamp(wave_index - ((int)wave.sampleRate * 30), 0, (int)wave.frameCount);
-        }
-        if (ImGui::MenuItem("-10s", nullptr, false, samples != nullptr)) {
-          wave_index = std::clamp(wave_index - ((int)wave.sampleRate * 10), 0, (int)wave.frameCount);
-        }
-        if (ImGui::MenuItem("+10s", nullptr, false, samples != nullptr)) {
-          wave_index = std::clamp(wave_index + ((int)wave.sampleRate * 10), 0, (int)wave.frameCount);
-        }
-        if (ImGui::MenuItem("+30s", nullptr, false, samples != nullptr)) {
-          wave_index = std::clamp(wave_index + ((int)wave.sampleRate * 30), 0, (int)wave.frameCount);
-        }
-
-        ImGui::EndMenu();
+      if (show_demo) {
+        ImGui::ShowDemoWindow(&show_demo);
       }
 
-      if (ImGui::BeginMenu("Help")) {
-        ImGui::MenuItem("About", nullptr, &show_about);
-        ImGui::Separator();
-        ImGui::MenuItem("Demo", nullptr, &show_demo);
-        ImGui::EndMenu();
-      }
-
-      ImGui::EndMainMenuBar();
-    }
-
-    auto push_disabled_btn_flags = []() {
-      ImGui::PushItemFlag(ImGuiItemFlags_Disabled, true);
-      ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.5f, 0.5f, 0.5f, 0.5f));
-    };
-
-    auto pop_disabled_btn_flags = []() {
-      ImGui::PopItemFlag();
-      ImGui::PopStyleColor();
-    };
-
-    const bool is_playing = IsAudioStreamPlaying(stream);
-
-    ImGuiStyle &style = ImGui::GetStyle();
-
-    ImGui::SetNextWindowSize({ (float)width, panel_height });
-    ImGui::SetNextWindowPos({ 0, (float)height - panel_height }, ImGuiCond_Always);
-    ImGui::Begin("Audio", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar);
-
-    ImVec2 frame_padding(16.0f, 12.0f);
-
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, frame_padding);
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
-
-    if (!samples) {
-      push_disabled_btn_flags();
-    }
-
-    if (ImGui::Button(ICON_FA_BACKWARD_FAST)) {
-      spdlog::debug("Fast backward button pressed");
-      wave_index = std::clamp(wave_index - ((int)wave.sampleRate * 30), 0, (int)wave.frameCount);
-    }
-    ImGui::SameLine();
-    if (ImGui::Button(ICON_FA_BACKWARD_STEP)) {
-      spdlog::debug("Step backward button pressed");
-      wave_index = std::clamp(wave_index - ((int)wave.sampleRate * 10), 0, (int)wave.frameCount);
-    }
-
-    ImGui::SameLine();
-    if (is_playing) {
-      push_disabled_btn_flags();
-    }
-
-    if (ImGui::Button(ICON_FA_PLAY)) {
-      spdlog::debug("Play button pressed");
-      PlayAudioStream(stream);
-    }
-
-    if (is_playing) {
-      pop_disabled_btn_flags();
-    }
-
-    ImGui::SameLine();
-    if (!is_playing) {
-      push_disabled_btn_flags();
-    }
-
-    if (ImGui::Button(ICON_FA_PAUSE)) {
-      spdlog::debug("Pause button pressed");
-      StopAudioStream(stream);
-    }
-
-    if (!is_playing) {
-      pop_disabled_btn_flags();
-    }
-
-    ImGui::SameLine();
-    if (ImGui::Button(ICON_FA_STOP)) {
-      spdlog::debug("Stop button pressed");
-      StopAudioStream(stream);
-      wave_index = 0;
-    }
-
-    ImGui::SameLine();
-    if (ImGui::Button(ICON_FA_FORWARD_STEP)) {
-      spdlog::debug("Fast forward button pressed");
-      wave_index = std::clamp(wave_index + ((int)wave.sampleRate * 10), 0, (int)wave.frameCount);
-    }
-    ImGui::SameLine();
-    if (ImGui::Button(ICON_FA_FORWARD_FAST)) {
-      spdlog::debug("Step forward button pressed");
-      wave_index = std::clamp(wave_index + ((int)wave.sampleRate * 30), 0, (int)wave.frameCount);
-    }
-
-    if (!samples) {
-      pop_disabled_btn_flags();
-    }
-
-    ImGui::PopStyleVar();
-    ImGui::PopStyleVar();
-
-    ImGui::SameLine();
-
-    std::string current_timestamp;
-    if (samples) {
-      current_timestamp = format_wave_timestamp(wave, wave_index);
-    } else {
-      current_timestamp = "--:--";
-    }
-
-    ImGui::Text(fmt::format("{} / {}", current_timestamp, total_timestamp).c_str());
-
-    if (show_about) {
-      if (ImGui::Begin("About Audio Visualizer", &show_about)) {
-        ImGui::Text("This application was created for fun and educational purposes.");
-        ImGui::Text("Developed by AceIII");
-        ImGui::SameLine();
-        ImGui::TextLinkOpenURL("https://github.com/aceiii");
-        ImGui::NewLine();
-        ImGui::Text("Uses the following libraries:");
-        ImGui::BulletText("Raylib");
-        ImGui::BulletText("Dear ImGui");
-        ImGui::BulletText("KissFFT");
-        ImGui::BulletText("rlImGui");
-        ImGui::BulletText("ArgParse");
-        ImGui::BulletText("SpdLog");
-        ImGui::BulletText("Magic Enum");
-        ImGui::BulletText("NativeFileDialog-extended");
-        ImGui::BulletText("toml++");
-      }
       ImGui::End();
     }
-
-    if (show_demo) {
-      ImGui::ShowDemoWindow(&show_demo);
-    }
-
-    ImGui::End();
-
     rlImGuiEnd();
 
     DrawFPS(width - 100, height - 24);
