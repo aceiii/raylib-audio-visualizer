@@ -518,8 +518,10 @@ void AudioVisualizer::run() {
             ImGui::Text(item.name.c_str());
             ImGui::SameLine();
 
+            bool pushed = false;
             if (item.is_playing) {
               push_disabled_btn_flags();
+              pushed = true;
             }
 
             if (ImGui::SmallButton(ICON_FA_PLAY)) {
@@ -535,7 +537,7 @@ void AudioVisualizer::run() {
               }
             }
 
-            if (item.is_playing) {
+            if (pushed) {
               pop_disabled_btn_flags();
             }
 
