@@ -9,11 +9,13 @@ vcpkg_installed/
 .idea/
 .vscode/
 .cache/
+
+# cmake
 cmake-build-*
+CMakeUserPresets.json
 
 # executables
 main
-aceboy
 
 # application files
 imgui.ini

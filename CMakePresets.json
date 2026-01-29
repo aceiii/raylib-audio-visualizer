@@ -1,0 +1,59 @@
+{
+  "version": 2,
+  "configurePresets": [
+    {
+      "name": "default",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+      }
+    },
+    {
+      "name": "Debug",
+      "displayName": "Configure Debug",
+      "inherits": "default",
+      "binaryDir": "${sourceDir}/build",
+      "environment": {
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "Release",
+      "displayName": "Configure Release",
+      "inherits": "default",
+      "binaryDir": "${sourceDir}/build-release",
+      "environment": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "RelWithDebInfo",
+      "displayName": "Configure ReleaseWithDebInfo",
+      "inherits": "default",
+      "binaryDir": "${sourceDir}/build-release-debinfo",
+      "environment": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "Debug",
+      "displayName": "Build Debug",
+      "configurePreset": "Debug"
+    },
+    {
+      "name": "Release",
+      "displayName": "Build Release",
+      "configurePreset": "Release"
+    },
+    {
+      "name": "RelWithDebInfo",
+      "displayName": "Build RelWithDebInfo",
+      "configurePreset": "RelWithDebInfo"
+    }
+  ]
+}
