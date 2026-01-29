@@ -1,6 +1,11 @@
-# Raylib C++ Template
+# Raylib Audio Visualizer
+
+A fun little program to see audio waveforms while playing them.
 
 
-TODO: Replace contents of this README file
+# Images
+
+![Audio Visualizer](images/visualizer_2026-01-28.png)
+
 
 
