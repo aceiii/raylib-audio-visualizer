@@ -16,10 +16,10 @@ set(SOURCE_FILES
     src/audiovisualizer.cpp
 )
 
-set(ARGPARSE_BUILD_TESTS OFF)
-set(KISSFFT_STATIC ON)
-set(KISSFFT_TEST OFF)
-set(KISSFFT_TOOLS OFF)
+set(ARGPARSE_BUILD_TESTS OFF CACHE BOOL "ArgParse Tests" FORCE)
+set(KISSFFT_STATIC ON CACHE BOOL "KissFFT Static Lib" FORCE)
+set(KISSFFT_TEST OFF CACHE BOOL "KissFFT TEST" FORCE)
+set(KISSFFT_TOOLS OFF CACHE BOOL "KissFFT Tools" FORCE)
 
 include(cmake/raylib.cmake)
 include(cmake/rlimgui.cmake)
