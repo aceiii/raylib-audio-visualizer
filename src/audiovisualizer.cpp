@@ -58,7 +58,7 @@ void AudioVisualizer::run() {
   std::vector<PlaylistItem> playlist;
 
   Wave wave;
-  AudioStream stream;
+  AudioStream stream = LoadAudioStream(48000, 16, 1);
   float* samples = nullptr;
   int wave_index = 0;
   std::string total_timestamp = "--:--";
@@ -379,8 +379,7 @@ void AudioVisualizer::run() {
         ImGui::EndMainMenuBar();
       }
 
-
-      const bool is_playing = IsAudioStreamPlaying(stream);
+      const bool is_playing = IsAudioStreamValid(stream) && IsAudioStreamPlaying(stream);
 
       ImGuiStyle &style = ImGui::GetStyle();
 
