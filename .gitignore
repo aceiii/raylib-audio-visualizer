@@ -4,6 +4,7 @@ Thumbs.db
 
 # build/ide folders
 build/
+build-*
 dist/
 vcpkg_installed/
 .idea/
