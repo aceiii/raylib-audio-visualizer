@@ -1,3 +1,5 @@
+#include <print>
+#include <cstdio>
 #include <argparse/argparse.hpp>
 #include <magic_enum/magic_enum.hpp>
 #include <spdlog/spdlog.h>
@@ -14,6 +16,20 @@ static bool set_logging_level(const std::string &level_name) {
   return false;
 }
 
+template <>
+struct std::formatter<argparse::ArgumentParser> {
+public:
+  constexpr auto parse(auto &ctx) {
+    return ctx.begin();
+  }
+
+  auto format(const argparse::ArgumentParser &instr, auto &ctx) const {
+    std::ostringstream out;
+    out << instr;
+    return std::ranges::copy(std::move(out).str(), ctx.out()).out;
+  }
+};
+
 auto main(int argc, char *argv[]) -> int {
   spdlog::set_level(spdlog::level::info);
 
@@ -27,18 +43,16 @@ auto main(int argc, char *argv[]) -> int {
   try {
     program.parse_args(argc, argv);
   } catch (const std::exception &err) {
-    std::cerr << err.what() << std::endl;
-    std::cerr << program;
+    std::println(stderr, "{}", err.what());
+    std::println(stderr, "{}", program);
     return 1;
   }
 
   const std::string level = program.get("--log-level");
   if (!set_logging_level(level)) {
-    std::cerr << fmt::format("Invalid argument \"{}\" - allowed options: "
-                             "{{trace, debug, info, warn, err, critical, off}}",
-                             level)
-              << std::endl;
-    std::cerr << program;
+    std::println(stderr, "Invalid argument \"{}\" - allowed options: "
+                        "{{trace, debug, info, warn, err, critical, off}}", level);
+    std::println(stderr, "{}", program);
     return 1;
   }
 
